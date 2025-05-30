@@ -259,3 +259,10 @@
       - wget
       - curl
     state: present
+
+- name: Install Bash [Alpine]
+  when:
+    - ansible_distribution == 'Alpine'
+  ansible.builtin.package:
+    name: bash 
+    state: present
