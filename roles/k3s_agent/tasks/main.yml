@@ -84,6 +84,7 @@
   notify: 
     - restart k3s service (OpenRc)
     - restart k3s service (systemd)
+    
 - name: Copy K3s service file
   ansible.builtin.template:
     src: "{{ k3s_service_template }}"
@@ -95,8 +96,5 @@
     - restart k3s service (OpenRc)
     - restart k3s service (systemd)
 
-- name: Enable and start K3s agent
-  ansible.builtin.service:
-    name: k3s-agent
-    enabled: true
-    state: started
+- name: start k3s agent service
+  meta: flush_handlers
