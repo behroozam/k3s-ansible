@@ -1,16 +1,17 @@
-- name: restart k3s-agent service
+- name: restart k3s service (OpenRc)
   when:
     - is_openrc
   ansible.builtin.service:
-    name: k3s-agent
+    name: k3s
     state: restarted
     enabled: true
 
-- name: restart k3s-agent service
+- name: restart k3s service (systemd)
   when:
     - is_systemd
-  ansible.builtin.service:
-    name: k3s-agent
+  ansible.builtin.systemd_service:
+    name: k3s
     state: restarted
     enabled: true
     daemon_reload: true
+    

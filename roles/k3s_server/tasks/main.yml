@@ -82,7 +82,9 @@
         content: "{{ server_config_yaml }}"
         dest: "/etc/rancher/k3s/config.yaml"
         mode: "0644"
-      notify: restart k3s service
+      notify: 
+        - restart k3s service (OpenRc)
+        - restart k3s service (systemd)
 
 - name: Init first server node
   when: inventory_hostname == groups[server_group][0] or ansible_host == groups[server_group][0]
@@ -96,7 +98,9 @@
         owner: root
         group: root
         mode: "0754"
-      notify: restart k3s service
+      notify: 
+        - restart k3s service (OpenRc)
+        - restart k3s service (systemd)
 
     - name: Copy K3s service file [HA]
       when:
@@ -108,7 +112,9 @@
         owner: root
         group: root
         mode: "0754"
-      notify: restart k3s service
+      notify: 
+        - restart k3s service (OpenRc)
+        - restart k3s service (systemd)
 
     - name: Add service environment variables
       when: 
@@ -117,14 +123,18 @@
         path: "{{ k3s_env_file }}"
         line: "{{ item }}"
       with_items: "{{ extra_service_envs }}"
-      notify: restart k3s service
+      notify: 
+        - restart k3s service (OpenRc)
+        - restart k3s service (systemd)
 
     - name: Delete any existing token from the environment if different from the new one
       ansible.builtin.lineinfile:
         state: absent
         path: "{{ k3s_env_file }}"
         regexp: "^K3S_TOKEN=\\s*(?!{{ token | default('') | regex_escape }}\\s*$)"
-      notify: restart k3s service
+      notify: 
+        - restart k3s service (OpenRc)
+        - restart k3s service (systemd)
 
     # Add the token to the environment if it has been provided.
     # Otherwise, let the first server create one on the first run.
@@ -135,11 +145,13 @@
         line: "K3S_TOKEN={{ token }}"
       when: 
       - token is defined
-      notify: restart k3s service
+      notify: 
+        - restart k3s service (OpenRc)
+        - restart k3s service (systemd)
 
     - name: Restart k3s service
       meta: flush_handlers
-      
+
     - name: Pause to allow first server startup
       when: 
         - inventory_hostname == groups[server_group][0]
@@ -268,7 +280,9 @@
         owner: root
         group: root
         mode: "0754"
-      notify: restart k3s service
+      notify: 
+        - restart k3s service (OpenRc)
+        - restart k3s service (systemd)
 
     - name: Verify that all server nodes joined
       when: not ansible_check_mode and (groups[server_group] | length) > 1
