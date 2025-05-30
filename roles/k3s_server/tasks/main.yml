@@ -259,30 +259,16 @@
       with_items:
         - "K3S_TOKEN={{ token }}"
 
-    - name: Copy K3s service file [HA] 
-      when: 
-        - not use_external_database
+    - name: Copy K3s service file [HA]/[External DB]
       ansible.builtin.template:
         src: "{{ k3s_service_template }}"
         dest: "{{ k3s_service_file_path }}"
         owner: root
         group: root
         mode: "0754"
-      register: service_file_ha
 
-
-    - name: Copy K3s service file [External DB]
-      when: 
-        - use_external_database
-      ansible.builtin.template:
-        src: "{{ k3s_service_template }}"
-        dest: "{{ k3s_service_file_path }}"
-        owner: root
-        group: root
-        mode: "0754"
-      notify: 
-        - restart k3s service (OpenRc)
-        - restart k3s service (systemd)
+    - name: Restart k3s service
+      meta: flush_handlers
 
     - name: Verify that all server nodes joined
       when: not ansible_check_mode and (groups[server_group] | length) > 1
