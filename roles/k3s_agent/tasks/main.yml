@@ -3,8 +3,8 @@
   ansible.builtin.set_fact:
     is_systemd: "{{ ansible_service_mgr == 'systemd' }}"
     is_openrc: "{{ ansible_service_mgr == 'openrc' }}"
-    k3s_env_file: "{{ systemd_dir + '/k3s-agent.service.env' if ansible_service_mgr == 'systemd' else k3s_env_dir + '/k3s-agent.env' }}"
-    k3s_service_file_path: "{{ systemd_dir + '/k3s-agent.service' if ansible_service_mgr == 'systemd' else openrc_dir + '/k3s-agent' }}"
+    k3s_env_file: "{{ systemd_dir + 'k3s-agent.service.env' if ansible_service_mgr == 'systemd' else k3s_env_dir + 'k3s-agent.env' }}"
+    k3s_service_file_path: "{{ systemd_dir + 'k3s-agent.service' if ansible_service_mgr == 'systemd' else openrc_dir + 'k3s-agent' }}"
     k3s_service_template: "{{ 'k3s-agent.service.j2' if ansible_service_mgr == 'systemd' else 'k3s-agent.openrc.j2' }}"
 
 
