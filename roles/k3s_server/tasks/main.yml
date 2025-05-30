@@ -59,7 +59,7 @@
 - name: Init first server node
   when: inventory_hostname == groups[server_group][0] or ansible_host == groups[server_group][0]
   block:
-    - name: Copy K3s service file [Single]
+    - name: Copy K3s service file (systemd) [Single]
       when: 
         - groups[server_group] | length == 1 or use_external_database
         - ansible_service_mgr == 'systemd'
@@ -71,7 +71,7 @@
         mode: "0644"
       register: service_file_single
 
-    - name: Copy K3s service file [HA]
+    - name: Copy K3s service file (systemd) [HA]
       when:
         - groups[server_group] | length > 1
         - not use_external_database
@@ -84,7 +84,32 @@
         mode: "0644"
       register: service_file_ha
 
-    - name: Add service environment variables
+    - name: Copy K3s service file (OpenRc) [Single]
+      when: 
+        - groups[server_group] | length == 1 or use_external_database
+        - ansible_service_mgr == 'openrc'
+      ansible.builtin.template:
+        src: "k3s-single.openrc.j2"
+        dest: "{{ openrc_dir }}/k3s"
+        owner: root
+        group: root
+        mode: "0644"
+      register: service_file_single
+
+    - name: Copy K3s service file (OpenRc) [HA]
+      when:
+        - groups[server_group] | length > 1
+        - not use_external_database
+        - ansible_service_mgr == 'systemd'
+      ansible.builtin.template:
+        src: "k3s-cluster-init.openrc.j2"
+        dest: "{{ openrc }}/k3s"
+        owner: root
+        group: root
+        mode: "0644"
+      register: service_file_ha
+
+    - name: Add service environment variables (systemd)
       when: 
         - extra_service_envs is defined
         - ansible_service_mgr == 'systemd'
@@ -93,7 +118,7 @@
         line: "{{ item }}"
       with_items: "{{ extra_service_envs }}"
 
-    - name: Delete any existing token from the environment if different from the new one
+    - name: Delete any existing token from the environment if different from the new one (systemd)
       when: 
         - ansible_service_mgr == 'systemd'
       ansible.builtin.lineinfile:
@@ -101,9 +126,26 @@
         path: "{{ systemd_dir }}/k3s.service.env"
         regexp: "^K3S_TOKEN=\\s*(?!{{ token | default('') | regex_escape }}\\s*$)"
 
+    - name: Add service environment variables (openrc)
+      when: 
+        - extra_service_envs is defined
+        - ansible_service_mgr == 'openrc'
+      ansible.builtin.lineinfile:
+        path: "{{ k3s_env_dir }}/k3s.env"
+        line: "{{ item }}"
+      with_items: "{{ extra_service_envs }}"
+
+    - name: Delete any existing token from the environment if different from the new one (openrc)
+      when: 
+        - ansible_service_mgr == 'openrc'
+      ansible.builtin.lineinfile:
+        state: absent
+        path: "{{ k3s_env_dir }}/k3s.env"
+        regexp: "^K3S_TOKEN=\\s*(?!{{ token | default('') | regex_escape }}\\s*$)"
+
     # Add the token to the environment if it has been provided.
     # Otherwise, let the first server create one on the first run.
-    - name: Add token as an environment variable
+    - name: Add token as an environment variable (systemd)
       no_log: true # avoid logging the server token
       ansible.builtin.lineinfile:
         path: "{{ systemd_dir }}/k3s.service.env"
@@ -112,16 +154,42 @@
       - token is defined
       - ansible_service_mgr == 'systemd'
 
+    - name: Add token as an environment variable (openrc)
+      no_log: true # avoid logging the server token
+      ansible.builtin.lineinfile:
+        path: "{{ k3s_env_dir }}/k3s.env"
+        line: "K3S_TOKEN={{ token }}"
+      when: 
+      - token is defined
+      - ansible_service_mgr == 'openrc'
+
     - name: Restart K3s service
-      when:
-        - ansible_facts.services['k3s.service'] is defined
-        - ansible_facts.services['k3s.service'].state == 'running'
-        - service_file_single.changed or service_file_ha.changed or _server_config_result.changed
-        - ansible_service_mgr == 'systemd'
-      ansible.builtin.systemd:
-        name: k3s
-        daemon_reload: true
-        state: restarted
+      block:
+      - name: Restart K3s service systemd
+        when:
+          - ansible_facts.services['k3s.service'] is defined
+          - ansible_facts.services['k3s.service'].state == 'running'
+          - service_file_single.changed or service_file_ha.changed or _server_config_result.changed
+          - ansible_service_mgr == 'systemd'
+        ansible.builtin.systemd:
+          name: k3s
+          daemon_reload: true
+          state: restarted
+
+      - name: Populate service facts
+        ansible.builtin.service_facts:
+        when:
+          - ansible_service_mgr == 'openrc'
+
+      - name: Restart K3s service openrc
+        when:
+          - ansible_facts.services['k3s'] is defined
+          - ansible_facts.services['k3s'].state == 'running'
+          - service_file_single.changed or service_file_ha.changed or _server_config_result.changed
+          - ansible_service_mgr == 'openrc'
+        ansible.builtin.service:
+          name: k3s
+          state: restarted
 
     - name: Enable and check K3s service
       when: 
