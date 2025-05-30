@@ -266,3 +266,12 @@
   ansible.builtin.package:
     name: bash 
     state: present
+
+- name: Ensure .bashrc exists for adding K3s autocomplete
+  ansible.builtin.copy:
+    dest: /{{ ansible_user }}/.bashrc
+    content: ''
+    owner: root
+    group: root
+    mode: '0644'
+    force: no
