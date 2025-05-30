@@ -9,6 +9,11 @@ start_pre() {
     rm -f /tmp/k3s.*
 }
 
+set -o allexport
+if [ -f /etc/environment ]; then . /etc/environment; fi
+if [ -f /etc/rancher/k3s/k3s.env ]; then . /etc/rancher/k3s/k3s.env; fi
+set +o allexport
+
 supervisor=supervise-daemon
 name=k3s
 command="/usr/local/bin/k3s"
@@ -21,8 +26,3 @@ error_log=/var/log/k3s.log
 pidfile="/var/run/k3s.pid"
 respawn_delay=5
 respawn_max=0
-
-set -o allexport
-if [ -f /etc/environment ]; then . /etc/environment; fi
-if [ -f /etc/rancher/k3s/k3s.env ]; then . /etc/rancher/k3s/k3s.env; fi
-set +o allexport

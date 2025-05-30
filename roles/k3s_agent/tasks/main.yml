@@ -1,4 +1,13 @@
 ---
+- name: Set dynamic facts for init system
+  ansible.builtin.set_fact:
+    is_systemd: "{{ ansible_service_mgr == 'systemd' }}"
+    is_openrc: "{{ ansible_service_mgr == 'openrc' }}"
+    k3s_env_file: "{{ systemd_dir + '/k3s-agent.service.env' if ansible_service_mgr == 'systemd' else k3s_env_dir + '/k3s-agent.env' }}"
+    k3s_service_file_path: "{{ systemd_dir + '/k3s-agent.service' if ansible_service_mgr == 'systemd' else openrc_dir + '/k3s-agent' }}"
+    k3s_service_template: "{{ 'k3s-agent.service.j2' if ansible_service_mgr == 'systemd' else 'k3s-agent.openrc.j2' }}"
+
+
 - name: Get k3s installed version
   ansible.builtin.command: k3s --version
   register: k3s_version_output
@@ -15,7 +24,8 @@
 #   - we couldn't get k3s installed version in the first task of this role
 #   - the installed version of K3s on the nodes is older than the requested version in ansible vars
 - name: Download artifact only if needed
-  when: not ansible_check_mode and airgap_dir is undefined and ( k3s_version_output.rc != 0 or installed_k3s_version is version(k3s_version, '<') )
+  when: not ansible_check_mode and airgap_dir is undefined and
+        (k3s_version_output.rc != 0 or installed_k3s_version is version(k3s_version, '<'))
   block:
     - name: Download K3s install script
       ansible.builtin.get_url:
@@ -34,6 +44,7 @@
         INSTALL_K3S_VERSION: "{{ k3s_version }}"
         INSTALL_K3S_EXEC: "agent"
       changed_when: true
+      notify: restart k3s-agent service
 
 - name: Setup optional config file
   when: agent_config_yaml is defined
@@ -49,41 +60,36 @@
         dest: "/etc/rancher/k3s/config.yaml"
         mode: "0644"
       register: _agent_config_result
+      notify: restart k3s-agent service
 
 - name: Get the token from the first server
   ansible.builtin.set_fact:
     token: "{{ hostvars[groups[server_group][0]].token }}"
 
-- name: Delete any existing token from the environment if different from the new one
+- name: Delete existing token if different
   ansible.builtin.lineinfile:
     state: absent
-    path: "{{ systemd_dir }}/k3s-agent.service.env"
+    path: "{{ k3s_env_file }}"
     regexp: "^K3S_TOKEN=\\s*(?!{{ token }}\\s*$)"
 
-- name: Add the token for joining the cluster to the environment
-  no_log: true # avoid logging the server token
+- name: Add K3s token to environment file
+  no_log: false
   ansible.builtin.lineinfile:
-    path: "{{ systemd_dir }}/k3s-agent.service.env"
-    line: "{{ item }}"
-  with_items:
-    - "K3S_TOKEN={{ token }}"
+    path: "{{ k3s_env_file }}"
+    line: "K3S_TOKEN={{ token }}"
+  notify: restart k3s-agent service
 
 - name: Copy K3s service file
-  register: k3s_agent_service
-  when:
-  - ansible_service_mgr == 'systemd'
   ansible.builtin.template:
-    src: "k3s-agent.service.j2"
-    dest: "{{ systemd_dir }}/k3s-agent.service"
+    src: "{{ k3s_service_template }}"
+    dest: "{{ k3s_service_file_path }}"
     owner: root
     group: root
-    mode: "u=rw,g=r,o=r"
+    mode: "0754"
+  notify: restart k3s-agent service
 
-- name: Enable and check K3s service
-  when:
-  - ansible_service_mgr == 'systemd'
-  ansible.builtin.systemd:
+- name: Enable and start K3s agent
+  ansible.builtin.service:
     name: k3s-agent
-    daemon_reload: "{{ true if k3s_agent_service.changed else false }}"
-    state: "{{ 'restarted' if (k3s_agent_service.changed or _agent_config_result.changed) else 'started' }}"
     enabled: true
+    state: started
