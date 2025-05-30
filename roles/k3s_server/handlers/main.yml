@@ -1,17 +1,19 @@
 - name: restart k3s service
-  when:
-    - is_openrc
-  ansible.builtin.service:
-    name: k3s
-    state: restarted
-    enabled: true
+  block:
+  - name: restart k3s service (OpenRc)
+    when:
+      - is_openrc
+    ansible.builtin.service:
+      name: k3s
+      state: restarted
+      enabled: true
 
-- name: restart k3s service
-  when:
-    - is_systemd
-  ansible.builtin.systemd_service:
-    name: k3s
-    state: restarted
-    enabled: true
-    daemon_reload: true
+  - name: restart k3s service (systemd)
+    when:
+      - is_systemd
+    ansible.builtin.systemd_service:
+      name: k3s
+      state: restarted
+      enabled: true
+      daemon_reload: true
     
