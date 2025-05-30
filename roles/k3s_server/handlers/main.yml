@@ -9,7 +9,7 @@
 - name: restart k3s service
   when:
     - is_systemd
-  nsible.builtin.systemd_service:
+  ansible.builtin.systemd_service:
     name: k3s
     state: restarted
     enabled: true
