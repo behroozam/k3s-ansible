@@ -14,9 +14,9 @@
     k3s_service_template: >-
       {{
         'k3s-cluster-init.service.j2' if ansible_service_mgr == 'systemd' and
-        (inventory_hostname == groups[server_group][0] or ansible_host == groups[server_group][0]) else
+        (inventory_hostname == groups[server_group][0] else
         'k3s-cluster-init.openrc.j2' if ansible_service_mgr == 'openrc' and
-        (inventory_hostname == groups[server_group][0] or ansible_host == groups[server_group][0]) else
+        (inventory_hostname == groups[server_group][0] else
         'k3s.service.j2' if ansible_service_mgr == 'systemd' and
         (groups[server_group] | length == 1 or use_external_database) else
         'k3s.openrc.j2' if ansible_service_mgr == 'openrc' and
@@ -87,7 +87,7 @@
         - restart k3s service (systemd)
 
 - name: Init first server node
-  when: inventory_hostname == groups[server_group][0] or ansible_host == groups[server_group][0]
+  when: inventory_hostname == groups[server_group][0]
   block:
     - name: Copy K3s service file [Single]
       when: 
@@ -238,7 +238,7 @@
 - name: Start other server if any and verify status
   when:
     - (groups[server_group] | length) > 1
-    - inventory_hostname != groups[server_group][0] and ansible_host != groups[server_group][0]
+    - inventory_hostname != groups[server_group][0]
   block:
     - name: Get the token from the first server
       ansible.builtin.set_fact:
