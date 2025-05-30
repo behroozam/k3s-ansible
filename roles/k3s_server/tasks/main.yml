@@ -60,7 +60,9 @@
   when: inventory_hostname == groups[server_group][0] or ansible_host == groups[server_group][0]
   block:
     - name: Copy K3s service file [Single]
-      when: groups[server_group] | length == 1 or use_external_database
+      when: 
+        - groups[server_group] | length == 1 or use_external_database
+        - ansible_service_mgr == 'systemd'
       ansible.builtin.template:
         src: "k3s-single.service.j2"
         dest: "{{ systemd_dir }}/k3s.service"
@@ -73,6 +75,7 @@
       when:
         - groups[server_group] | length > 1
         - not use_external_database
+        - ansible_service_mgr == 'systemd'
       ansible.builtin.template:
         src: "k3s-cluster-init.service.j2"
         dest: "{{ systemd_dir }}/k3s.service"
@@ -82,13 +85,17 @@
       register: service_file_ha
 
     - name: Add service environment variables
-      when: extra_service_envs is defined
+      when: 
+        - extra_service_envs is defined
+        - ansible_service_mgr == 'systemd'
       ansible.builtin.lineinfile:
         path: "{{ systemd_dir }}/k3s.service.env"
         line: "{{ item }}"
       with_items: "{{ extra_service_envs }}"
 
     - name: Delete any existing token from the environment if different from the new one
+      when: 
+        - ansible_service_mgr == 'systemd'
       ansible.builtin.lineinfile:
         state: absent
         path: "{{ systemd_dir }}/k3s.service.env"
@@ -101,7 +108,9 @@
       ansible.builtin.lineinfile:
         path: "{{ systemd_dir }}/k3s.service.env"
         line: "K3S_TOKEN={{ token }}"
-      when: token is defined
+      when: 
+      - token is defined
+      - ansible_service_mgr == 'systemd'
 
     - name: Restart K3s service
       when:
