@@ -266,6 +266,9 @@
         owner: root
         group: root
         mode: "0754"
+      notify: 
+        - restart k3s service (OpenRc)
+        - restart k3s service (systemd)
 
     - name: Restart k3s service
       meta: flush_handlers
