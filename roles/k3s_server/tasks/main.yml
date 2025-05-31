@@ -222,7 +222,8 @@
 
     - name: Verify that all server nodes joined
       when: 
-        - not ansible_check_mode 
+        - not ansible_check_mode
+        - inventory_hostname == groups[server_group][-1] #last host in the server group
         - ( groups[server_group] | length ) > 1
       ansible.builtin.command:
         cmd: >
