@@ -86,26 +86,9 @@
         - restart k3s service (OpenRc)
         - restart k3s service (systemd)
 
-- name: Init first server node
-  when: inventory_hostname == groups[server_group][0]
+- name: Init server node 
   block:
-    - name: Copy K3s service file [Single]
-      when: 
-        - groups[server_group] | length == 1 or use_external_database
-      ansible.builtin.template:
-        src: "{{ k3s_service_template }}"
-        dest: "{{ k3s_service_file_path }}"
-        owner: root
-        group: root
-        mode: "0754"
-      notify: 
-        - restart k3s service (OpenRc)
-        - restart k3s service (systemd)
-
-    - name: Copy K3s service file [HA]
-      when:
-        - groups[server_group] | length > 1
-        - not use_external_database
+    - name: Copy K3s service file
       ansible.builtin.template:
         src: "{{ k3s_service_template }}"
         dest: "{{ k3s_service_file_path }}"
@@ -158,6 +141,24 @@
         - intial_setup.changed
       ansible.builtin.pause:
         seconds: 10
+        
+    - name: Get the token if randomly generated
+      when: 
+        - token is not defined
+        - inventory_hostname == groups[server_group][0]
+      block:
+        - name: Wait for token
+          ansible.builtin.wait_for:
+            path: /var/lib/rancher/k3s/server/token
+
+        - name: Read node-token from master
+          ansible.builtin.slurp:
+            src: /var/lib/rancher/k3s/server/token
+          register: node_token
+
+        - name: Store Master node-token
+          ansible.builtin.set_fact:
+            token: "{{ node_token.content | b64decode | regex_replace('\n', '') }}"
 
     - name: Check whether kubectl is installed on control node
       ansible.builtin.command: 'kubectl'
@@ -219,62 +220,10 @@
           changed_when:
             - mv_result.rc == 0
 
-    - name: Get the token if randomly generated
-      when: token is not defined
-      block:
-        - name: Wait for token
-          ansible.builtin.wait_for:
-            path: /var/lib/rancher/k3s/server/token
-
-        - name: Read node-token from master
-          ansible.builtin.slurp:
-            src: /var/lib/rancher/k3s/server/token
-          register: node_token
-
-        - name: Store Master node-token
-          ansible.builtin.set_fact:
-            token: "{{ node_token.content | b64decode | regex_replace('\n', '') }}"
-
-- name: Start other server if any and verify status
-  when:
-    - (groups[server_group] | length) > 1
-    - inventory_hostname != groups[server_group][0]
-  block:
-    - name: Get the token from the first server
-      ansible.builtin.set_fact:
-        token: "{{ hostvars[groups[server_group][0]].token }}"
-
-    - name: Delete any existing token from the environment if different from the new one (systemd)
-      ansible.builtin.lineinfile:
-        state: absent
-        path: "{{ k3s_env_file }}"
-        regexp: "^K3S_TOKEN=\\s*(?!{{ token }}\\s*$)"
-
-
-    - name: Add the token for joining the cluster to the environment
-      no_log: true # avoid logging the server token
-      ansible.builtin.lineinfile:
-        path: "{{ k3s_env_file }}"
-        line: "{{ item }}"
-      with_items:
-        - "K3S_TOKEN={{ token }}"
-
-    - name: Copy K3s service file [HA]/[External DB]
-      ansible.builtin.template:
-        src: "{{ k3s_service_template }}"
-        dest: "{{ k3s_service_file_path }}"
-        owner: root
-        group: root
-        mode: "0754"
-      notify: 
-        - restart k3s service (OpenRc)
-        - restart k3s service (systemd)
-
-    - name: Restart k3s service
-      meta: flush_handlers
-
     - name: Verify that all server nodes joined
-      when: not ansible_check_mode and (groups[server_group] | length) > 1
+      when: 
+        - not ansible_check_mode 
+        - ( groups[server_group] | length ) > 1
       ansible.builtin.command:
         cmd: >
           k3s kubectl get nodes -l "node-role.kubernetes.io/control-plane=true" -o=jsonpath="{.items[*].metadata.name}"
