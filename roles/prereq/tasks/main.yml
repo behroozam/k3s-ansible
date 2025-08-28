@@ -260,8 +260,10 @@
         mode: "0644"
 
 - name: Install wget and curl required for downloading the k3s binary
+  when: airgap_dir is undefined
   ansible.builtin.package:
     name:
       - wget
       - curl
     state: present
+  
